@@ -246,7 +246,7 @@ async function submitQR(text, auto = false) {
   catch (e) {
     if (String(e.message).includes('Failed to fetch') || e instanceof TypeError) { queueScan(body, text); return; } // network drop mid-scan
     if (auto) stopScan();
-    toast(e.message, 'err'); $('#scanRes') && ($('#scanRes').innerHTML = `<p style="color:#f87171">${esc(e.message)}</p>`); }
+    toast(e.message, 'err'); $('#scanRes') && ($('#scanRes').innerHTML = `<p style="color:#DC2626">${esc(e.message)}</p>`); }
 }
 function queueScan(body, raw) {
   const q = getQueue();
