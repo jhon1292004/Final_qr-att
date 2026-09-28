@@ -62,9 +62,9 @@ function doLogout() { stopScan(); stopQR(); stopLive(); localStorage.removeItem(
 
 function viewDash() {
   $('#userBox').innerHTML = `${ME.name} <span class="badge">${ME.role}</span> <button class="ghost" onclick="doLogout()">Logout</button>`;
-  const tabs = ME.role === 'student' ? [['events', 'Events'], ['scan', 'Scan QR'], ['mine', 'My History']]
-    : ME.role === 'teacher' ? [['events', 'Events'], ['create', '+ New Event']]
-    : [['events', 'Events'], ['users', 'Users'], ['stats', 'Stats']];
+  const tabs = ME.role === 'student' ? [['events', 'Events'], ['scan', 'Scan QR'], ['mine', 'My History'], ['profile', 'Profile']]
+    : ME.role === 'teacher' ? [['events', 'Events'], ['create', '+ New Event'], ['profile', 'Profile']]
+    : [['events', 'Events'], ['users', 'Users'], ['stats', 'Stats'], ['profile', 'Profile']];
   $('#app').innerHTML = `<nav class="tabs">${tabs.map(([k, l]) => `<button class="${TAB === k ? 'on' : ''}" onclick="go('${k}')">${l}</button>`).join('')}</nav><div id="body"><div class="card">Loading…</div></div>`;
   renderTab();
 }
@@ -82,6 +82,7 @@ async function renderTab() {
         <div class="row">${ME.role === 'student' ? `<button class="blue" onclick="go('scan')">Scan to attend</button>` : `
           <button onclick="showQR(${e.id})">QR Code</button>
           <button class="blue" onclick="showAtt(${e.id})">Attendance</button>
+          <button class="ghost" onclick="editEvent(${e.id})">Edit</button>
           ${e.status === 'open' ? `<button class="red" onclick="setStatus(${e.id},'close')">Close</button>` : `<button onclick="setStatus(${e.id},'reopen')">Reopen</button>`}`}</div>
         <div id="att-${e.id}"></div></div>`).join('') + `</div>`;
     }
@@ -111,6 +112,11 @@ async function renderTab() {
       B.innerHTML = rows.length ? `<div class="card"><h3>My Attendance (${rows.length})</h3><table><tr><th>Event</th><th>Date</th><th>Status</th></tr>${rows.map(r => `<tr><td>${esc(r.title)}</td><td>${r.date} ${r.time}</td><td><span class="badge ${r.status}">${r.status}</span></td></tr>`).join('')}</table></div>`
         : `<div class="card">Empty: no attendance yet. Go to Scan QR.</div>`;
     }
+    if (TAB === 'profile') {
+      B.innerHTML = `<div class="card"><h3>My Profile <span class="badge">${esc(ME.role)}</span></h3>
+        <p><b>Name:</b> ${esc(ME.name)}<br><b>Email:</b> ${esc(ME.email)}
+        <br><b>Section:</b> ${esc(ME.section || '—')}<br><b>Program:</b> ${esc(ME.program || '—')}</p></div>`;
+    }
     if (TAB === 'users') {
       const users = await api('/api/admin/users');
       B.innerHTML = `<div class="card"><h3>Users (${users.length})</h3><table><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>${users.map(u => `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role}</td><td>${u.id !== ME.id ? `<button class="red" onclick="delUser(${u.id})">Delete</button>` : ''}</td></tr>`).join('')}</table></div>`;
@@ -139,6 +145,25 @@ async function createNewEvent() {
 async function setStatus(id, act) {
   try { await api(`/api/events/${id}/${act}`, { method: 'POST' }); toast(act === 'close' ? 'Event closed' : 'Event reopened', 'ok'); renderTab(); }
   catch (e) { toast(e.message, 'err'); }
+}
+// EVENT: Edit pressed -> prefilled form -> PUT /api/events/:id -> updated card
+async function editEvent(id) {
+  try {
+    const evs = await api('/api/events');
+    const e = evs.find(x => x.id === id);
+    if (!e) return toast('Event not found', 'err');
+    $('#qrModal').innerHTML = `<div class="card" style="position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;z-index:40" onclick="this.remove()">
+      <div class="card" style="width:min(92vw,480px)" onclick="event.stopPropagation()"><h3>Edit Event</h3>
+      <input id="ed_t" value="${esc(e.title)}"><div class="row"><input id="ed_d" type="date" value="${esc(e.date)}"><input id="ed_time" type="time" value="${esc(e.time)}"></div>
+      <input id="ed_v" value="${esc(e.venue)}"><textarea id="ed_desc">${esc(e.description || '')}</textarea>
+      <div class="row"><button onclick="saveEvent(${id})">Save</button><button class="ghost" onclick="document.querySelector('#qrModal').innerHTML=''">Cancel</button></div></div></div>`;
+  } catch (e) { toast(e.message, 'err'); }
+}
+async function saveEvent(id) {
+  try {
+    await api(`/api/events/${id}`, { method: 'PUT', body: JSON.stringify({ title: $('#ed_t').value, date: $('#ed_d').value, time: $('#ed_time').value, venue: $('#ed_v').value, description: $('#ed_desc').value }) });
+    $('#qrModal').innerHTML = ''; toast('Event updated', 'ok'); renderTab();
+  } catch (e) { toast(e.message, 'err'); }
 }
 // STEP 1 — Rotating QR (Teacher): setInterval() re-fetches QR every 15s with fresh timestamp.
 // EVENT: Teacher requests QR -> Handler showQR -> Action GET /qr every 15s -> Result fresh QR image
